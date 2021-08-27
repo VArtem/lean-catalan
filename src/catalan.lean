@@ -18,17 +18,33 @@ def internal : Tree → ℕ
 | Leaf := 0
 | (Branch l r) := (internal l) + (internal r) + 1
 
-@[simp] def internal_Leaf : internal Leaf = 0 := rfl
-@[simp] def internal_Branch (l r : Tree) : internal (Branch l r) = internal l + internal r + 1 := rfl
+@[simp] def internal_Leaf : Leaf.internal = 0 := rfl
+@[simp] def internal_Branch (l r : Tree) : (Branch l r).internal = l.internal + r.internal + 1 := rfl
+
+lemma eq_Leaf_of_internal_zero {t : Tree} (h : t.internal = 0) : t = Leaf := 
+begin
+  cases t with l r,
+  refl,
+  rw [internal_Branch] at h,
+  simpa only using h,
+end
+
+lemma eq_Branch_of_internal_succ {n : ℕ} {t : Tree} (h : t.internal = n.succ) : 
+  ∃ l r, t = Branch l r := 
+begin
+  cases t with l r,
+  { rw [internal_Leaf] at h, simpa only using h},
+  { use [l, r] },
+end
+
 
 def TreeN (n : ℕ) := {t : Tree // internal t = n}
 
-def leaf0 : TreeN 0 := ⟨Leaf, internal_Leaf⟩ 
 def combineTrees {n m : ℕ} (l : TreeN n) (r : TreeN m) : 
   TreeN (n + m).succ := ⟨Branch l.1 r.1, by rw [internal_Branch, l.2, r.2]⟩
 
 def all : Π (n : ℕ), finset (TreeN n)
-| 0 := {leaf0}
+| 0 := { ⟨Leaf, internal_Leaf⟩ }
 | (n + 1) := 
   finset.bUnion (finset.nat.antidiagonal n) $
   λ i, if h : i.1 < n.succ ∧ i.2 < n.succ ∧ i.1 + i.2 = n then
@@ -36,10 +52,11 @@ def all : Π (n : ℕ), finset (TreeN n)
     let h₂ := and.left (and.right h) in
     let h₃ := and.right (and.right h) in
       finset.image 
-      (λ p : TreeN i.1 × TreeN i.2, by {rw ←h₃, exact combineTrees p.1 p.2})
+      (λ p : TreeN i.1 × TreeN i.2, 
+        ⟨Branch p.1.val p.2.val, 
+        by {rw [internal_Branch, p.fst.property, p.snd.property, h₃]}⟩)
       (finset.product (all i.1) (all i.2))
     else ∅
-
 
 instance {n : ℕ} : fintype (TreeN n) :=
   ⟨all n, 
@@ -48,32 +65,28 @@ instance {n : ℕ} : fintype (TreeN n) :=
     clear n,
     rintro n ih ⟨t, h⟩,
     cases n, {
-      rw [all, mem_singleton, leaf0, internal_Leaf],
-      cases t with a b l r,
-      { simp only [subtype.mk_eq_mk] },
-      { rw internal at h,
-        exfalso,
-        linarith },
+      rw [all, mem_singleton, subtype.mk_eq_mk],
+      exact eq_Leaf_of_internal_zero h,
     }, {
-      cases t with a b l r,
-      { simpa only using h},
-      simp [all, internal] at h ⊢,
-      rw nat.add_one at h,
-      replace h := nat.succ_inj'.1 h,
+      rcases eq_Branch_of_internal_succ h with ⟨a, b, rfl⟩,
+      rw [internal, nat.add_one, nat.succ_inj'] at h,
       subst h,
+      
+      have a_lt : a.internal < (a.internal + b.internal).succ := 
+        lt_of_lt_of_le (nat.lt_succ_self _) (nat.succ_le_succ $ nat.le_add_right _ _),
 
-      have a_lt : a.internal < (a.internal + b.internal).succ := by {rw nat.succ_eq_add_one, linarith},
-      have b_lt : b.internal < (a.internal + b.internal).succ := by {rw nat.succ_eq_add_one, linarith},
-      use [a.internal, b.internal],
-      simp only [true_and, dite_eq_ite, and_true, add_left_inj, eq_self_iff_true, nat.mem_antidiagonal, subtype.coe_eta, set_coe_cast,
-  eq_mpr_eq_cast, subtype.val_eq_coe],
-      rw if_pos,
-      simp only [mem_image, exists_prop, prod.exists, mem_product],
+      have b_lt : b.internal < (a.internal + b.internal).succ := 
+        lt_of_lt_of_le (nat.lt_succ_self _) (nat.succ_le_succ $ nat.le_add_left _ _),
+
+      simp only [all, mem_bUnion, exists_prop, nat.mem_antidiagonal, subtype.val_eq_coe, prod.exists],
+      use [a.internal, b.internal, rfl],
+      rw dif_pos,
       {
+        simp only [mem_image, exists_prop, prod.exists, mem_product],
         use [a, b],
         refine ⟨⟨ih _ a_lt ⟨a, _⟩, ih _ b_lt ⟨b, _⟩⟩, rfl⟩,
+        use [a_lt, b_lt],
       },
-      exact ⟨a_lt, b_lt⟩,
     }
   end⟩
 
@@ -103,19 +116,11 @@ begin
       congr',
       ext,
       split_ifs, {
-        rw [card_image_of_injective, card_product],
-        rw [ih, ih],
-        exact h.2.1,
-        exact h.1,
-        
-        rintro a b,
-        simp only [cast_inj],
-        rintro h2,
-        rw [combineTrees, combineTrees] at h2,
+        rw [card_image_of_injective, card_product, ih _ h.1, ih _ h.2.1],
+        rintro a b h2,
         simp only [subtype.mk_eq_mk, subtype.val_eq_coe] at h2,
-        ext,
-        exact h2.1,
-        exact h2.2,
+        rw [prod.ext_iff, subtype.ext_iff, subtype.ext_iff],
+        exact ⟨h2.1, h2.2⟩,
       }, {
         simp only [card_empty],
       }
@@ -124,14 +129,12 @@ begin
       simp at hk,
       rw [nat.mem_antidiagonal] at hx hy,
       split_ifs at hk, {
-        simp at hk,
+        simp only [mem_image, exists_prop, prod.exists, mem_product] at hk,
         rcases hk with ⟨⟨a1, b1, ha1, hc1⟩, ⟨a2, b2, ha2, hc2⟩⟩,
         rcases k with ⟨(_ | ⟨kleft, kright⟩), kint⟩,
-        simpa using kint,
-        simp only [combineTrees, subtype.val_eq_coe] at hc1 hc2,
-        simp only [*, subtype.mk_eq_mk, bot_eq_empty, ne.def, set_coe_cast, not_mem_empty] at *,
-        rcases hc2 with ⟨hc21, hc22⟩,
-        substs hc21 hc22,
+        { simpa only using kint, },
+        simp only [subtype.mk_eq_mk] at hc1 hc2,
+        rcases hc2 with ⟨rfl, rfl⟩,
         apply hneq,
         repeat {rw ←subtype.val_eq_coe at hc1},
         rw prod.eq_iff_fst_eq_snd_eq,
