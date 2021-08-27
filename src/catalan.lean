@@ -24,9 +24,8 @@ def internal : Tree → ℕ
 lemma eq_Leaf_of_internal_zero {t : Tree} (h : t.internal = 0) : t = Leaf := 
 begin
   cases t with l r,
-  refl,
-  rw [internal_Branch] at h,
-  simpa only using h,
+  { refl },
+  { rw [internal_Branch] at h, simpa only using h },
 end
 
 lemma eq_Branch_of_internal_succ {n : ℕ} {t : Tree} (h : t.internal = n.succ) : 
@@ -37,58 +36,73 @@ begin
   { use [l, r] },
 end
 
+-- def TreeN (n : ℕ) := {t : Tree // internal t = n}
 
-def TreeN (n : ℕ) := {t : Tree // internal t = n}
+-- def combineTrees {n m : ℕ} (l : TreeN n) (r : TreeN m) : 
+--   TreeN (n + m).succ := ⟨Branch l.1 r.1, by rw [internal_Branch, l.2, r.2]⟩
 
-def combineTrees {n m : ℕ} (l : TreeN n) (r : TreeN m) : 
-  TreeN (n + m).succ := ⟨Branch l.1 r.1, by rw [internal_Branch, l.2, r.2]⟩
+lemma nat.lt_succ_of_add_right_eq {a b n : ℕ} (h : a + b = n) : a < n.succ :=
+  nat.lt_succ_of_le (h ▸ nat.le_add_right a b)
 
-def all : Π (n : ℕ), finset (TreeN n)
-| 0 := { ⟨Leaf, internal_Leaf⟩ }
+lemma nat.lt_succ_of_add_left_eq {a b n : ℕ} (h : a + b = n) : b < n.succ :=
+  nat.lt_succ_of_le (h ▸ nat.le_add_left b a)
+
+def all_trees : Π (n : ℕ), finset Tree
+| 0 := ({ Leaf } : finset Tree)
 | (n + 1) := 
   finset.bUnion (finset.nat.antidiagonal n) $
-  λ i, if h : i.1 < n.succ ∧ i.2 < n.succ ∧ i.1 + i.2 = n then
-    let h₁ := and.left h in
-    let h₂ := and.left (and.right h) in
-    let h₃ := and.right (and.right h) in
+  λ p, if h : p.1 + p.2 = n then
+    let h₁ : p.1 < n + 1 := nat.lt_succ_of_add_right_eq h in
+    let h₂ : p.2 < n + 1 := nat.lt_succ_of_add_left_eq h in
       finset.image 
-      (λ p : TreeN i.1 × TreeN i.2, 
-        ⟨Branch p.1.val p.2.val, 
-        by {rw [internal_Branch, p.fst.property, p.snd.property, h₃]}⟩)
-      (finset.product (all i.1) (all i.2))
+      (λ i : Tree × Tree, Branch i.1 i.2)
+      (finset.product (all_trees p.1) (all_trees p.2))
     else ∅
 
-instance {n : ℕ} : fintype (TreeN n) :=
-  ⟨all n, 
-  begin
-    apply nat.strong_induction_on n,
-    clear n,
-    rintro n ih ⟨t, h⟩,
+
+@[simp] lemma all_trees_zero : all_trees 0 = ({ Leaf } : finset Tree) := by rw all_trees
+
+lemma lt_add_right_succ (a b : ℕ) : a < (a + b).succ :=
+  lt_of_lt_of_le (nat.lt_succ_self _) (nat.succ_le_succ $ nat.le_add_right _ _)
+
+lemma lt_add_left_succ (a b : ℕ) : b < (a + b).succ :=
+  lt_of_lt_of_le (nat.lt_succ_self _) (nat.succ_le_succ $ nat.le_add_left _ _)
+
+def mem_all {t : Tree} : t ∈ all_trees t.internal :=
+begin
+  induction t with a b iha ihb, {
+    simp only [all_trees_zero, internal_Leaf, mem_singleton],
+  }, {
+    rw [internal_Branch, all_trees, mem_bUnion],
+    simp only [exists_prop, nat.mem_antidiagonal, prod.exists],
+    use [a.internal, b.internal, rfl],
+    rw dif_pos rfl,
+    simp only [iha, ihb, mem_image, exists_prop, and_true, exists_eq_right_right, exists_eq_right, prod.exists, mem_product],
+  }
+end
+
+def internal_eq_of_mem_all_trees {t : Tree} {n : ℕ} (h : t ∈ all_trees n) : n = t.internal :=
+begin
+  induction t with a b iha ihb generalizing n, {
     cases n, {
-      rw [all, mem_singleton, subtype.mk_eq_mk],
-      exact eq_Leaf_of_internal_zero h,
+      exact internal_Leaf,
     }, {
-      rcases eq_Branch_of_internal_succ h with ⟨a, b, rfl⟩,
-      rw [internal, nat.add_one, nat.succ_inj'] at h,
-      subst h,
-      
-      have a_lt : a.internal < (a.internal + b.internal).succ := 
-        lt_of_lt_of_le (nat.lt_succ_self _) (nat.succ_le_succ $ nat.le_add_right _ _),
-
-      have b_lt : b.internal < (a.internal + b.internal).succ := 
-        lt_of_lt_of_le (nat.lt_succ_self _) (nat.succ_le_succ $ nat.le_add_left _ _),
-
-      simp only [all, mem_bUnion, exists_prop, nat.mem_antidiagonal, subtype.val_eq_coe, prod.exists],
-      use [a.internal, b.internal, rfl],
-      rw dif_pos,
-      {
-        simp only [mem_image, exists_prop, prod.exists, mem_product],
-        use [a, b],
-        refine ⟨⟨ih _ a_lt ⟨a, _⟩, ih _ b_lt ⟨b, _⟩⟩, rfl⟩,
-        use [a_lt, b_lt],
-      },
+      simp [all_trees] at h,
+      rcases h with ⟨a, b, rfl, h⟩, 
+      simpa only [if_pos rfl, mem_image, if_true, exists_false] using h,
     }
-  end⟩
+  }, {
+    cases n, {
+      simpa using h,
+    }, {
+      simp [all_trees] at h,
+      rcases h with ⟨x, y, rfl, h⟩,
+      simp only [if_pos rfl, mem_image, exists_prop, if_true, exists_eq_right_right, exists_eq_right, prod.exists, mem_product] at h,
+      rw [iha h.1, ihb h.2],
+      exact internal_Branch _ _,
+    }
+  }
+end
 
 end Tree
 
@@ -97,52 +111,50 @@ open Tree
 def catalan : ℕ → ℕ
 | 0 := 1
 | (n + 1) := ∑ p in finset.nat.antidiagonal n, 
-  if h : p.1 < n.succ ∧ p.2 < n.succ ∧ p.1 + p.2 = n then
-    let h₁ := and.left h in 
-    let h₂ := and.left (and.right h) in
-    let h₃ := and.right (and.right h) in
+  if h : p.1 + p.2 = n then
+    let h₁ : p.1 < n + 1 := nat.lt_succ_of_add_right_eq h in
+    let h₂ : p.2 < n + 1 := nat.lt_succ_of_add_left_eq h in
     catalan p.1 * catalan p.2
   else 0
 
-lemma catalan_eq_TreeN_card {n} : catalan n = (all n).card :=
+lemma catalan_eq_all_trees_card {n} : catalan n = (all_trees n).card :=
 begin
   apply nat.strong_induction_on n,
+  clear n,
   rintro n ih,
   cases n, {
-    simp only [catalan, univ, fintype.elems, all, card_singleton],
+    rw [catalan, all_trees_zero, card_singleton],
   }, {
-    simp only [all, catalan, eq_mpr_eq_cast],
+    simp only [all_trees, catalan],
     rw [card_bUnion], { 
-      congr',
+      congr,  
       ext,
       split_ifs, {
-        rw [card_image_of_injective, card_product, ih _ h.1, ih _ h.2.1],
-        rintro a b h2,
-        simp only [subtype.mk_eq_mk, subtype.val_eq_coe] at h2,
-        rw [prod.ext_iff, subtype.ext_iff, subtype.ext_iff],
-        exact ⟨h2.1, h2.2⟩,
+        rw [card_image_of_injective, card_product],
+        rw [ih _ $ nat.lt_succ_of_add_right_eq h],
+        rw [ih _ $ nat.lt_succ_of_add_left_eq h],
+        rintro a b hab,
+        simp only at hab,
+        exact prod.ext hab.1 hab.2, 
       }, {
         simp only [card_empty],
       }
     }, {
       rintro x hx y hy hneq k hk,
-      simp at hk,
+      simp only [dite_eq_ite, inf_eq_inter, mem_inter] at hk,
       rw [nat.mem_antidiagonal] at hx hy,
-      split_ifs at hk, {
-        simp only [mem_image, exists_prop, prod.exists, mem_product] at hk,
-        rcases hk with ⟨⟨a1, b1, ha1, hc1⟩, ⟨a2, b2, ha2, hc2⟩⟩,
-        rcases k with ⟨(_ | ⟨kleft, kright⟩), kint⟩,
-        { simpa only using kint, },
-        simp only [subtype.mk_eq_mk] at hc1 hc2,
-        rcases hc2 with ⟨rfl, rfl⟩,
-        apply hneq,
-        repeat {rw ←subtype.val_eq_coe at hc1},
-        rw prod.eq_iff_fst_eq_snd_eq,
-        rw [←a1.property, ←a2.property, ←b1.property, ←b2.property],
-        rw [hc1.1, hc1.2],
-        exact ⟨rfl, rfl⟩,
-      }, 
-      all_goals { simpa using hk },
+      
+      split_ifs at hk, 
+      
+      simp only [mem_image, exists_prop, prod.exists, mem_product] at hk,
+      rcases hk with ⟨⟨a1, b1, ha1, hc1⟩, ⟨a2, b2, ha2, rfl⟩⟩,
+      rcases Branch.inj hc1 with ⟨rfl, rfl⟩,
+      apply hneq,
+      ext, {
+        rw [internal_eq_of_mem_all_trees ha1.1, internal_eq_of_mem_all_trees ha2.1],        
+      }, {
+        rw [internal_eq_of_mem_all_trees ha1.2, internal_eq_of_mem_all_trees ha2.2],        
+      },        
     }
   }
 end
