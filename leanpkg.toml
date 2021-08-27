@@ -1,8 +1,8 @@
 [package]
 name = "catalan"
 version = "0.1"
-lean_version = "leanprover-community/lean:3.31.0"
+lean_version = "leanprover-community/lean:3.32.1"
 path = "src"
 
 [dependencies]
-mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "e8fc4663df27c8306b8bcb392d0c7329b790a3fe"}
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "a32785195eae0a8abdc4f4692d6c1f3f504c40a1"}
