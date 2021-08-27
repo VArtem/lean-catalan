@@ -140,3 +140,13 @@ begin
     }
   }
 end
+
+def TreeN (n : ℕ) := {t : Tree // internal t = n}
+
+instance {n : ℕ} : fintype (TreeN n) :=
+  ⟨(all_trees n).subtype (λ t, t.internal = n), 
+  begin
+    rintro ⟨t, rfl⟩,
+    rw mem_subtype,
+    exact mem_all_trees,
+  end⟩
