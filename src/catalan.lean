@@ -29,9 +29,11 @@ namespace catalan
   catalan p.1 * catalan p.2 := 
 begin
   rw [catalan, sum_congr rfl],
-  rintro ⟨x, y⟩ h,
-  rw nat.mem_antidiagonal at h,
-  simp only [h, dite_eq_ite, if_true, eq_self_iff_true],
+  simp_rw nat.mem_antidiagonal,
+  rintro ⟨x, y⟩ rfl,
+  simp only [dif_pos rfl],
 end
+
+-- TODO: catalan n = C(2n, n) - C(2n, n - 1) = C(2n, n) / (n + 1)
 
 end catalan
